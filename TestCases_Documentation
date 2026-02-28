@@ -1,0 +1,208 @@
+##################################Functional Test Cases ######################
+Testcase #: TC01
+Title: Upload File
+Purpose: Validate basic file upload functionality.
+Steps:
+Upload a file with valid size (≥1MB).
+Verify response status code.
+Check that file_id is returned in the response.
+Expected Result:
+Status code = 201
+Response contains file_id
+file_id is not None
+
+Testcase #: TC02
+Title: Download File
+Purpose: Validate file download functionality.
+Steps:
+Upload a file.
+Download the file using GET /files/{file_id}.
+Verify response status code and content.
+Expected Result:
+Status code = 200
+Content starts with "test" (dummy data)
+
+
+Testcase #: TC03
+Title: Get Metadata
+Purpose: Validate metadata retrieval.
+Steps:
+Upload a file.
+Retrieve metadata using GET /files/{file_id}/metadata.
+Verify metadata fields.
+Expected Result:
+Status code = 200
+Metadata contains file_id, size
+size > 0
+
+
+Testcase #: TC04
+Title: Delete File
+Purpose: Validate file deletion and metadata cleanup.
+Steps:
+Upload a file.
+Delete it using DELETE /files/{file_id}.
+Attempt to retrieve the file again.
+Expected Result:
+Delete status code = 200 or 204
+
+Testcase #: TC05
+Title: Upload File with Malicious Name
+Purpose: Validate filename sanitization and prevent path traversal attacks.
+Steps:
+Upload a file with filename "../../etc/passwd".
+Observe the response.
+Expected Result:
+Status code = 400 (reject invalid filename)
+Actual Result: Currently accepts malicious filename (Bug).
+
+################################ Fault and boundary and Security scenarios#################
+Testcase #: TC01
+Title: Upload with no file
+Purpose: Validate API behavior when no file is provided.
+Steps:
+Call POST /files with empty files={} payload.
+Observe response.
+Expected Result:
+API should reject the request.
+Status code = 400 or 422.
+
+Testcase #: TC02
+Title: Upload zero‑byte file
+Purpose: Validate API behavior for empty file uploads.
+Steps:
+Upload a file with size = 0 bytes.
+Observe response.
+If accepted, retrieve metadata.
+Expected Result:
+API should reject with status code = 400.
+If accepted (201), metadata should show size = 0.
+
+Testcase #: TC03
+Title: Upload file just under 1MB
+Purpose: Validate boundary condition for minimum file size.
+Steps:
+Upload a file with size = 0.999 MB.
+Retrieve metadata.
+Expected Result:
+Status code = 201 (accepted).
+Metadata shows size < 1MB.
+
+Testcase #: TC04
+Title: Upload large file (10GB)
+Purpose: Validate boundary condition for maximum file size.
+Steps:
+Upload a file with size = 10GB.
+Observe response.
+If accepted, retrieve metadata.
+Expected Result:
+API should reject with status code = 413 (Payload Too Large).
+If accepted (201), metadata should show size ≥ 10GB.
+
+
+Testcase #: TC05
+Title: Trigger tiering without authentication
+Purpose: Validate security enforcement for admin operations.
+Steps:
+Call POST /admin/tiering/run without credentials.
+Observe response.
+Expected Result:
+API should reject the request.
+Status code = 401 or 403.
+
+Testcase #: TC06
+Title: Get stats without authentication
+Purpose: Validate security enforcement for admin stats retrieval.
+Steps:
+Call GET /admin/stats without credentials.
+Observe response.
+Expected Result:
+
+API should reject the request.
+
+Status code = 401 or 403.
+
+
+##############################Performance and Tiering Test Cases###############
+Testcase #: TC01
+Title: HOT → WARM transition at 30 days
+Purpose: Validate tiering boundary for HOT files.
+Steps:
+Upload a file.
+Mock last_accessed to 30 days ago.
+Trigger tiering.
+Retrieve metadata.
+Expected Result: File tier changes to WARM.
+
+Testcase #: TC02
+Title: WARM → COLD transition at 90 days
+Purpose: Validate tiering boundary for WARM files.
+Steps:
+Upload a file.
+Mock last_accessed to 90 days ago.
+Trigger tiering.
+Retrieve metadata.
+Expected Result: File tier changes to COLD.
+
+Testcase #: TC03
+Title: Remain HOT at 29 days
+Purpose: Ensure HOT tier files don’t move prematurely.
+Steps:
+Upload a file.
+Mock last_accessed to 29 days ago.
+Trigger tiering.
+Retrieve metadata.
+Expected Result: File remains in HOT tier.
+
+Testcase #: TC04
+Title: Remain WARM at 89 days
+Purpose: Ensure WARM tier files don’t move prematurely.
+Steps:
+Upload a file.
+Mock last_accessed to 89 days ago.
+Trigger tiering.
+Retrieve metadata.
+Expected Result: File remains in WARM tier.
+
+Testcase #: TC05
+Title: Access restoration resets tier to HOT
+Purpose: Validate that accessing a file restores it to HOT tier.
+Steps:
+Upload a file.
+Mock last_accessed to 100 days ago.
+Trigger tiering → file moves to COLD.
+Download the file.
+Retrieve metadata.
+Expected Result: File tier resets to HOT after access.
+
+Testcase #: TC06
+Title: Negative value for update-last-accessed
+Purpose: Validate input validation for days_ago.
+Steps:
+Upload a file.
+Call update-last-accessed with days_ago = -5.
+Observe response.
+Expected Result: API rejects with 400 Bad Request.
+
+
+Testcase #: TC07
+Title: Bulk upload of 100 files
+Purpose: Validate system performance under bulk upload.
+Steps:
+Upload 100 files sequentially.
+Verify each upload succeeds.
+Download each file.
+Expected Result:
+All uploads succeed with status 201.
+All files accessible via GET /files/{file_id}.
+
+Testcase #: TC08
+Title: Bulk delete of 50 files
+Purpose: Validate system performance under bulk deletion.
+Steps:
+Upload 50 files.
+Delete each file sequentially.
+Retrieve metadata for each deleted file.
+Expected Result:
+All deletions succeed with status 200/204.
+Metadata retrieval returns 404.
